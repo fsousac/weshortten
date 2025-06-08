@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "8081:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik.yml:/etc/traefik/traefik.yml:ro"
+    networks:
+      - web
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: weshorten
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - web
+
+  weshorten:
+    build: .
+    image: weshorten:latest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.weshorten-api.rule=Host(`short.local`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.weshorten-api.entrypoints=web"
+      - "traefik.http.services.weshorten.loadbalancer.server.port=8080"
+      - "traefik.http.routers.weshorten-redirect.rule=Host(`short.local`)"
+      - "traefik.http.routers.weshorten-redirect.entrypoints=web"
+      - "traefik.http.routers.weshorten-redirect.priority=1"
+      - "traefik.http.routers.weshorten-redirect.service=weshorten"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+    depends_on:
+      - db
+    networks:
+      - web
+
+volumes:
+  pgdata:
+
+networks:
+  web:
+    driver: bridge
